@@ -8,6 +8,46 @@ function info($txt){
 
 function error(){}
 
+class InfoLog{
+    const LOG = "main.log";
+    const UPLOAD_ERRORS = "upload-errors.log";
+    const PROCESSED = "processed.log";
+    const SKIP = "skip.log";
+    const TIME_FORMAT = "Y-m-d:H:i:s";
+
+    private function getTime(){
+        $date = new DateTime(null, new DateTimeZone('America/Sao_Paulo'));
+        return $date->format(self::TIME_FORMAT);
+    }
+
+    private function writeLog($txt){
+        file_put_contents(self::LOG, $this->getTime() . " $txt", FILE_APPEND);
+    }
+
+    public function info($txt){
+        $this->writeLog("INFO: " . $txt);
+    }
+
+    public function error($txt){
+        $this->writeLog("ERROR: " . $txt);
+    }
+
+    public function infoProcessed($file){
+        $this->info("Processing file $file...");
+        file_put_contents(self::PROCESSED, $file, FILE_APPEND);
+    }
+
+    public function infoSkip($file){
+        $this->info("Arquivo $file não alterado, não será enviado");
+        file_put_contents(self::SKIP, $file, FILE_APPEND);
+    }
+
+    public function uploadError($file){
+        $this->info("Um erro ocorreu durante o upload do arquivo $file, arquivo não será enviado!");
+        file_put_contents(self::UPLOAD_ERRORS, $file, FILE_APPEND);
+    }
+}
+
 class SmugClient{
     const TOKEN = "gnXh7ZH5X77tSVkqgKXXfpkj9xpmXm6T";
     CONST TOKEN_SEC = "BWPJTxNQDt9DdKJ9FWzGx4Bk3NZc9GjMQBVBMz247j8d88xpJG2QkPQ5VDk835JT";
