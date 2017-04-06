@@ -21,30 +21,30 @@ class Logger{
     }
 
     private static function writeLog($txt){
-        file_put_contents(self::LOG, $this->getTime() . " $txt", FILE_APPEND);
+        file_put_contents(self::LOG, self::getTime() . " $txt", FILE_APPEND);
     }
 
     public static function info($txt){
-        $this->writeLog("INFO: " . $txt);
+        self::writeLog("INFO: " . "$txt\n");
     }
 
     public static function error($txt){
-        $this->writeLog("ERROR: " . $txt);
+        self::writeLog("ERROR: " . "$txt\n");
     }
 
-    public function infoProcessed($file){
-        $this->info("Processing file $file...");
-        file_put_contents(self::PROCESSED, $file, FILE_APPEND);
+    public static function infoProcessed($file){
+        self::info("Processing file $file...\n");
+        file_put_contents(self::PROCESSED, "$file\n", FILE_APPEND);
     }
 
-    public function infoSkip($file){
-        $this->info("Arquivo $file não alterado, não será enviado");
-        file_put_contents(self::SKIP, $file, FILE_APPEND);
+    public static function infoSkip($file){
+        self::info("Arquivo $file não alterado, não será enviado.\n");
+        file_put_contents(self::SKIP, "$file\n", FILE_APPEND);
     }
 
-    public function uploadError($file){
-        $this->info("Um erro ocorreu durante o upload do arquivo $file, arquivo não será enviado!");
-        file_put_contents(self::UPLOAD_ERRORS, $file, FILE_APPEND);
+    public static function errorUpload($file){
+        self::info("Um erro ocorreu durante o upload do arquivo $file, arquivo não será enviado!\n");
+        file_put_contents(self::UPLOAD_ERRORS, "$file\n", FILE_APPEND);
     }
 }
 
@@ -71,9 +71,9 @@ class SmugClient{
     }
 
     public function connect(){
-        info("Connecting to smugmug...");
+        Logger::info("Connecting to smugmug...");
         if($this->client != null){
-            log("Already connected!");
+            Logger:info("Already connected!");
             return $this->client;
         }
         $options = [ 'AppName' => self::APP_NAME, 
@@ -82,7 +82,8 @@ class SmugClient{
         ];
         $this->client = new phpSmug\Client(self::API_KEY, $options);
         $this->setToken();
-        info("OK!");
+        $this->getFolderUploads(true);
+        Logger::info("OK!");
         return $this->client;
     }
 
@@ -118,9 +119,7 @@ class SmugClient{
     public function getMd5Sums($album, $imageName){
         $imageInfo = $this->getImageInfo($album);
         if(!array_key_exists("AlbumImage", $imageInfo)) return null;
-      //  print_r($imageInfo);
         foreach($imageInfo->AlbumImage as $info){
-           //echo "\t\t\t\t$imageName == " . $info->FileName ."\n";
             if($info->FileName == $imageName) return $info->ArchivedMD5;
         }
         return null;
@@ -168,9 +167,14 @@ class Uploader {
     private $client = null;
     private $smugClient;
 
-    function __construct() {
+    function connect() {
         $this->smugClient = new SmugClient();
-        $this->client = $this->smugClient->connect();
+        try{
+            $this->client = $this->smugClient->connect();
+        }catch(Exception $e){
+            Logger::error("Conection error " . $e->getMessage());
+            throw($e);
+        }
    }
 
     private function log($text){
@@ -194,24 +198,24 @@ class Uploader {
 
     private function createAlbumIfNotExists($path, $tags){
         $albumName = $this->getFolderName($path);
-        info("Searching for $albumName album...");
+        Logger::info("Searching for $albumName album...");
         if($this->smugClient->albumExists($albumName)){
-            info("\tAlbum found");
+            Logger::info("\tAlbum found");
         }
         else{
-            info("\tAlbum not found, creating it...");
+            Logger::info("\tAlbum not found, creating it...");
             $this->smugClient->createAlbum($albumName, $tags);
         }
     }
 
     private function getDirs($parent){
-        info("Getting subdirectories from $parent...");
+        Logger::info("Getting subdirectories from $parent...");
         $dirs = glob($parent . '/*' , GLOB_ONLYDIR);
         return $dirs;
     }
     
     private function getPhotos($dir){
-        info("Searching for media in $dir directory ...");
+        Logger::info("Searching for media in $dir directory ...");
         return glob("$dir/*.". self::MEDIA_PATTERN, GLOB_BRACE);
     }
 
@@ -221,39 +225,48 @@ class Uploader {
         $files = $this->getPhotos($path);
         $tags = $this->getTags($path);
         if(count($files)== 0){
-            info("Directory $path has no media files, nothing to do here!");
+            Logger::info("Directory $path has no media files, nothing to do here!");
             return;
         }
 
         $this->createAlbumIfNotExists($path, $tags);
         foreach($files as $file){
-            info("\tProcessing file $file...");
+            Logger::infoProcessed($file);
             $md5 = $this->smugClient->getMd5Sums($albumName, $this->getFolderName($file));
             if($md5 != null && md5_file($file) == $md5){
-                info("\t\tArquivo $file não alterado, não será enviado");
+                Logger::infoSkip($file);
                 continue;
             }
             
-            info("\t\tUploading...");
-            $this->smugClient->upload($file, $albumName, $tags);
+            Logger::info("Uploading $file...");
+            try{
+                $this->smugClient->upload($file, $albumName, $tags);
+            }catch(Exception $e){
+                Logger::error("Error during file upload($file), file will be skiped.");
+            }
         }
     }
 
     public function processDir($path) {
-        info("");
-        info("Processing directory $path...");
+        Logger::info("Processing directory $path...");
         $dirs = $this->getDirs($path);
         if(count($dirs) > 0){
-            info("Directory $path contains children, processing them first...");
+            Logger::info("Directory $path contains children, processing them first...");
         }
         foreach($dirs as $child){
             $this->processDir($child);
         }
         $this->sendFiles($path);
-        info("");
     }
    
 }
 
 $uploader = new Uploader();
-$uploader->processDir($argv[1]);
+try{
+    Logger::info("Start scripting in " . $argv[1] . "...");
+    $uploader->connect();
+    $uploader->processDir($argv[1]);
+    Logger::info("End processing.");
+}catch(Exception $e){
+    echo "Um erro ocorreu finalizando. Cheque o arquivo main.log.\n";
+}
