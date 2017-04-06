@@ -38,12 +38,12 @@ class Logger{
     }
 
     public static function infoSkip($file){
-        self::info("Arquivo $file não alterado, não será enviado.\n");
+        self::info("File $file has not changed and will be skiped.\n");
         file_put_contents(self::SKIP, "$file\n", FILE_APPEND);
     }
 
     public static function errorUpload($file){
-        self::info("Um erro ocorreu durante o upload do arquivo $file, arquivo não será enviado!\n");
+        self::error("Error during file upload($file), file will be skiped.");
         file_put_contents(self::UPLOAD_ERRORS, "$file\n", FILE_APPEND);
     }
 }
@@ -242,7 +242,7 @@ class Uploader {
             try{
                 $this->smugClient->upload($file, $albumName, $tags);
             }catch(Exception $e){
-                Logger::error("Error during file upload($file), file will be skiped.");
+                Logger::errorUpload($file);
             }
         }
     }
