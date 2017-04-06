@@ -8,27 +8,27 @@ function info($txt){
 
 function error(){}
 
-class InfoLog{
+class Logger{
     const LOG = "main.log";
     const UPLOAD_ERRORS = "upload-errors.log";
     const PROCESSED = "processed.log";
     const SKIP = "skip.log";
     const TIME_FORMAT = "Y-m-d:H:i:s";
 
-    private function getTime(){
+    private static function getTime(){
         $date = new DateTime(null, new DateTimeZone('America/Sao_Paulo'));
         return $date->format(self::TIME_FORMAT);
     }
 
-    private function writeLog($txt){
+    private static function writeLog($txt){
         file_put_contents(self::LOG, $this->getTime() . " $txt", FILE_APPEND);
     }
 
-    public function info($txt){
+    public static function info($txt){
         $this->writeLog("INFO: " . $txt);
     }
 
-    public function error($txt){
+    public static function error($txt){
         $this->writeLog("ERROR: " . $txt);
     }
 
