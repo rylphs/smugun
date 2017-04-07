@@ -16,6 +16,16 @@ class Logger{
     const TIME_FORMAT = "Y-m-d:H:i:s";
 
     private $level = 0;
+    private $logLocation;
+
+    public function __construct(){
+        if(func_num_args() > 0){
+            $this->logLocation = rtrim(func_get_arg(0), '/') . "/";
+        }
+        else $this->logLocation = "./";
+
+        
+    }
 
     private function getTime(){
         $date = new DateTime(null, new DateTimeZone('America/Sao_Paulo'));
@@ -24,7 +34,7 @@ class Logger{
 
     private function writeLog($txt){
         $txt = str_repeat("   ", $this->level).$txt . "\n";
-        file_put_contents(self::LOG, $this->getTime() . " $txt", FILE_APPEND);
+        file_put_contents($this->logLocation . self::LOG, $this->getTime() . " $txt", FILE_APPEND);
     }
 
     private function decreaseLevel(){
@@ -50,17 +60,17 @@ class Logger{
 
     public function infoProcessed($file){
         $this->info("Processing file $file...");
-        file_put_contents(self::PROCESSED, "$file\n", FILE_APPEND);
+        file_put_contents($this->logLocation . self::PROCESSED, "$file\n", FILE_APPEND);
     }
 
     public function infoSkip($file){
         $this->infoOk("File $file has not changed and will be skiped.");
-        file_put_contents(self::SKIP, "$file\n", FILE_APPEND);
+        file_put_contents($this->logLocation . self::SKIP, "$file\n", FILE_APPEND);
     }
 
     public function errorUpload($file){
         $this->error("Error during file upload($file), file will be skiped.");
-        file_put_contents(self::UPLOAD_ERRORS, "$file\n", FILE_APPEND);
+        file_put_contents($this->logLocation . self::UPLOAD_ERRORS, "$file\n", FILE_APPEND);
     }
 }
 
@@ -179,10 +189,12 @@ class Uploader {
     private $numberOfFilesSkiped = 0;
     private $numberOfFilesWithError = 0;
     private $logger;
+    private $dir;
 
-    public function __construct(){
+    public function __construct($folder){
+        $this->dir = $folder;
         $this->smugClient = new SmugClient();
-        $this->logger = new Logger();
+        $this->logger = new Logger($folder);
     }
 
     private function connect() {
@@ -287,7 +299,8 @@ class Uploader {
         $this->logger->infoOk();
     }
 
-    public function startProcessing($dir){
+    public function startProcessing(){
+        $dir = $this->dir;
         $this->logger->info("Start processing $dir.");
         $this->connect();
         $this->processDir($dir);
@@ -301,12 +314,11 @@ class Uploader {
    
 }
 
-$uploader = new Uploader();
 try{
-   $dir = $argv[1];
+   $dir = rtrim($argv[1], "/");
    echo "Starting script at $dir ...\n";
-   $uploader = new Uploader();
-   $uploader->startProcessing($dir);
+   $uploader = new Uploader($dir);
+   $uploader->startProcessing();
    echo "Success!\n";
 }catch(Exception $e){
     echo "An error has ocurred. Check the main.log file.\n";
