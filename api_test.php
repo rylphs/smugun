@@ -44,7 +44,7 @@ function parameterIndexedArray($array){
     foreach($array as $value){
         $keyvalue = explode("=", $value);
         if(count($keyvalue)!= 2) continue;
-        $indexedArray[$keyvalue[0]] = $indexedArray[1];
+        $indexedArray[$keyvalue[0]] = $keyvalue[1];
     }
     return $indexedArray;
 }
@@ -53,7 +53,7 @@ function getPathResponse($str, $array){
     $result = $array;
     $path = explode(",", $str);
     foreach($path as $v){
-        if($v == "") continue;
+        if(trim($v) == "") continue;
         if(is_array($result)){
             $result = $result[$v];    
         }
@@ -62,10 +62,11 @@ function getPathResponse($str, $array){
     return $result;
 }
 
-$uri=$argv[1];
-if($argc > 2) $path=$argv[2];
+$command=$argv[1];
+$uri=$argv[2];
+if($argc > 3) $path=$argv[3];
 else $path = "";
-if($argc > 3) $options=parameterIndexedArray($argv[3]);
+if($argc > 4) $options=parameterIndexedArray($argv[4]);
 else $options = [];
 
 $smugClient = new SmugClient();
@@ -73,6 +74,9 @@ $smugClient->connect();
 $client = $smugClient->getClient();
 
 echo "\n";
-print_r(getPathResponse($path, $client->get($uri, $options)));
+if($command == "get")
+    print_r(getPathResponse($path, $client->get($uri, $options)));
+else if($command == "post")
+    print_r(getPathResponse($path, $client->post($uri, $options)));
 echo "\n";
 echo "\n";
