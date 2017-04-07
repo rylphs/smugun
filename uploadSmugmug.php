@@ -183,6 +183,7 @@ class Uploader {
     private $numberOfFilesUploaded = 0;
     private $numberOfFilesSkiped = 0;
     private $numberOfFilesWithError = 0;
+    private $numberOfTotalFiles = 0;
     private $logger;
     private $dir;
 
@@ -201,6 +202,15 @@ class Uploader {
             $this->logger->error("Conection error " . $e->getMessage());
             throw($e);
         }
+   }
+
+   private function countFiles($folder){
+       $subs = glob($folder . '/*' , GLOB_ONLYDIR);
+       foreach($subs as $subDir){
+           $this->countFiles($subDir);
+       }
+       $files = glob("$folder/*.". self::MEDIA_PATTERN, GLOB_BRACE);
+       $this->numberOfTotalFiles += count($files);
    }
 
     private function getFolderName($path){
@@ -292,10 +302,12 @@ class Uploader {
 
     public function startProcessing(){
         $dir = $this->dir;
+        $this->countFiles($dir);
         $this->logger->info("Start processing $dir.");
         $this->connect();
         $this->processDir($dir);
         $this->logger->infoOk();
+        $this->logger->infoOk("Total files: " . $this->numberOfTotalFiles);
         $this->logger->infoOk("Total files processed: " . $this->numberOfFilesProcessed);
         $this->logger->infoOk("Total files uploaded: " . $this->numberOfFilesUploaded);
         $this->logger->infoOk("Total files skiped: " . $this->numberOfFilesSkiped);
