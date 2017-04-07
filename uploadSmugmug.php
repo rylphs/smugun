@@ -71,11 +71,6 @@ class SmugClient{
     }
 
     public function connect(){
-        Logger::info("Connecting to smugmug...");
-        if($this->client != null){
-            Logger:info("Already connected!");
-            return $this->client;
-        }
         $options = [ 'AppName' => self::APP_NAME, 
             '_verbosity' => self::VERBOSITY, 
             'OAuthSecret' => self::OAUTH_SEC
@@ -83,8 +78,6 @@ class SmugClient{
         $this->client = new phpSmug\Client(self::API_KEY, $options);
         $this->setToken();
         $this->getFolderUploads(true);
-        Logger::info("OK!");
-        return $this->client;
     }
 
     private function getFolderUploads($force){
@@ -164,13 +157,18 @@ class SmugClient{
 class Uploader {
     const MEDIA_PATTERN = "{jpg,JPG,png,PNG}";
 
-    private $client = null;
     private $smugClient;
+    private $numberOfFilesProcessed = 0;
+    private $numberOfFilesUploaded = 0;
+    private $numberOfFilesSkiped = 0;
+    private $numberOfFilesWithError = 0;
 
-    function connect() {
+    private function connect() {
         $this->smugClient = new SmugClient();
         try{
-            $this->client = $this->smugClient->connect();
+            Logger::info("Connecting to smugmug...");
+            $this->smugClient->connect();
+            Logger::info("Connected!");
         }catch(Exception $e){
             Logger::error("Conection error " . $e->getMessage());
             throw($e);
@@ -232,22 +230,26 @@ class Uploader {
         $this->createAlbumIfNotExists($path, $tags);
         foreach($files as $file){
             Logger::infoProcessed($file);
+            $this->numberOfFilesProcessed++;
             $md5 = $this->smugClient->getMd5Sums($albumName, $this->getFolderName($file));
             if($md5 != null && md5_file($file) == $md5){
                 Logger::infoSkip($file);
+                $this->numberOfFilesSkiped++;
                 continue;
             }
             
             Logger::info("Uploading $file...");
             try{
                 $this->smugClient->upload($file, $albumName, $tags);
+                $this->numberOfFilesUploaded++;
             }catch(Exception $e){
+                $this->numberOfFilesWithError++;
                 Logger::errorUpload($file);
             }
         }
     }
 
-    public function processDir($path) {
+    private function processDir($path) {
         Logger::info("Processing directory $path...");
         $dirs = $this->getDirs($path);
         if(count($dirs) > 0){
@@ -258,15 +260,27 @@ class Uploader {
         }
         $this->sendFiles($path);
     }
+
+    public function startProcessing($dir){
+        Logger::info("Start processing $dir.");
+        $this->connect();
+        $this->processDir($dir);
+        Logger::info("Total files processed: " . $this->numberOfFilesProcessed);
+        Logger::info("Total files uploaded: " . $this->numberOfFilesUploaded);
+        Logger::info("Total files skiped: " . $this->numberOfFilesSkiped);
+        Logger::info("Total errors when uploading: " . $this->numberOfFilesWithError);
+        Logger::info("End processing.");
+    }
    
 }
 
 $uploader = new Uploader();
 try{
-    Logger::info("Start scripting in " . $argv[1] . "...");
-    $uploader->connect();
-    $uploader->processDir($argv[1]);
-    Logger::info("End processing.");
+   $dir = $argv[1];
+   echo "Starting script at $dir ...\n";
+   $uploader = new Uploader();
+   $uploader->startProcessing($dir);
+   echo "Success!\n";
 }catch(Exception $e){
-    echo "Um erro ocorreu finalizando. Cheque o arquivo main.log.\n";
+    echo "An error has ocurred. Check the main.log file.\n";
 }
