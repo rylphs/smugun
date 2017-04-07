@@ -86,22 +86,26 @@ class SmugClient{
     private $uploadFolderInfo = null;
     private $fileInfo = [];
 
+    private function splitPath($path){
+        $path = trim($path, "/");
+        $exploded = explode("/", $path);
+        return [
+            'path' => implode("/", array_slice($exploded, 0, count($exploded-1))),
+            'object' => $exploded[count($exploded - 1)]
+        ];
+    }
+
+    private function getNodeId($path){
+        $folderInfo = $this->get("user/rapha/folder/Uploads/" . $path);
+        return $folderInfo->Folder->NodeID;
+    }
+
     private function setToken(){
         $authtoken = array(
             "oauth_token" => self::TOKEN,
             "oauth_token_secret" => self::TOKEN_SEC
         );
         $this->client->setToken($authtoken['oauth_token'], $authtoken['oauth_token_secret']);
-    }
-
-    public function connect(){
-        $options = [ 'AppName' => self::APP_NAME, 
-            '_verbosity' => self::VERBOSITY, 
-            'OAuthSecret' => self::OAUTH_SEC
-        ];
-        $this->client = new phpSmug\Client(self::API_KEY, $options);
-        $this->setToken();
-        $this->getFolderUploads(true);
     }
 
     private function getFolderUploads($force){
@@ -133,6 +137,15 @@ class SmugClient{
         return $this->fileInfo[$album];
     }
 
+    public function connect(){
+        $options = [ 'AppName' => self::APP_NAME, 
+            '_verbosity' => self::VERBOSITY, 
+            'OAuthSecret' => self::OAUTH_SEC
+        ];
+        $this->client = new phpSmug\Client(self::API_KEY, $options);
+        $this->setToken();
+    }
+
     public function getMd5Sums($album, $imageName){
         $imageInfo = $this->getImageInfo($album);
         if(!array_key_exists("AlbumImage", $imageInfo)) return null;
@@ -142,9 +155,17 @@ class SmugClient{
         return null;
     }
 
-    public function albumExists($name){
+    public function albumExists($path){
         try{
-            return $this->getAlbumInfo($name) != null;
+            $path = $this->splitPath($path);
+            $albumInfo = $this->client->get("folder/user/rapha/Uploads/".$path->path."!albums");
+            if(!isset($albumInfo->Album) || count($albumInfo->Album)){
+                return false;
+            }
+            foreach($albumInfo->Album as $album){
+                if($album->Nome == $path->object) return true;
+            }
+            return false;
         }catch(Exception $e){
             if($e->getResponse()->getStatusCode() == 404){
                 return false;
@@ -152,10 +173,13 @@ class SmugClient{
         }
     }
 
-    public function createAlbum($name, $tags){
-        $urlCreate = 'folder/user/rapha/Uploads!albums';
+    public function createNode($path, $type, $tags){
+        $path = $this->splitPath($path);
+        $nodeId = $this->getNodeId($path->path);
+        $urlCreate = 'node/$nodeId!children';
         $albumOptions = [
             "Name" => ucfirst($name),
+            "Type" => $type,
             "Keywords" => $tags,
             "Privacy" => 3,
             "UrlName" => ucfirst($name),
@@ -234,17 +258,17 @@ class Uploader {
     private function createAlbumIfNotExists($path, $tags){
         $albumName = $this->getFolderName($path);
         $this->logger->info("Searching for $albumName album...");
-        if($this->smugClient->albumExists($albumName)){
+        if($this->smugClient->albumExists($path)){
             $this->logger->infoOk("Album already exists");
         }
         else{
             $this->logger->info("Album not found, creating it...");
-            $this->smugClient->createAlbum($albumName, $tags);
+            $this->smugClient->createAlbum($path, $tags);
             $this->logger->infoOk("OK");
         }
     }
 
-    private function getDirs($parent){
+    private function getFolders($parent){
         $this->logger->info("Getting subdirectories from $parent...");
         $dirs = glob($parent . '/*' , GLOB_ONLYDIR);
         $this->logger->infoOk();
@@ -291,14 +315,25 @@ class Uploader {
     }
 
     private function processDir($path) {
-        $this->logger->info("Processing directory $path...");
-        $dirs = $this->getDirs($path);
-        if(count($dirs) > 0){
-            $this->logger->info("Directory $path contains children, processing them first...");
+        $this->logger->info("Processing folder $path...");
+        $subFolders = $this->getFolders($path);
+
+        if(count($subFolders) > 0){
+            $this->logger->info("Checking if folder exists");
+
+            if($this->smugClient->folderExists($path)){
+                $this->logger->infoOk("Folder already exists");
+            }
+            else{
+                $this->logger->infoOk("Folder not exists, creating it...");
+            }
+            $this->logger->info("Processing $path children...");
         }
-        foreach($dirs as $child){
+
+        foreach($subFolders as $child){
             $this->processDir($child);
         }
+
         $this->sendFiles($path);
         $this->logger->infoOk();
     }
