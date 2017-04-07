@@ -11,17 +11,18 @@ class Logger{
 
     private $level = 0;
     private $logLocation;
-    private $mainLog;
+    private $startTime;
 
     public function __construct(){
         if(func_num_args() > 0){
             $this->logLocation = rtrim(func_get_arg(0), '/') . "/";
         }
         else $this->logLocation = "./";
-        file_put_contents($this->logLocation . self::UPLOAD_ERRORS, "");
-        file_put_contents($this->logLocation . self::PROCESSED, "");
-        file_put_contents($this->logLocation . self::SKIP, "");
-        $this->mainLog = $this->logLocation . $this->getTime("Y-m-d_H-i-s_") . self::LOG;
+        $this->startTime = $this->getTime("Y-m-d_H-i-s_");
+    }
+
+    private function getLogname($baseName){
+        return $this->logLocation . $this->startTime . $baseName;
     }
 
     private function getTime($format){
@@ -31,7 +32,7 @@ class Logger{
 
     private function writeLog($txt){
         $txt = str_repeat("   ", $this->level).$txt . "\n";
-        file_put_contents($this->mainLog, $this->getTime(self::TIME_FORMAT) . " $txt", FILE_APPEND);
+        file_put_contents($this->getLogname(self::LOG), $this->getTime(self::TIME_FORMAT) . " $txt", FILE_APPEND);
     }
 
     private function decreaseLevel(){
@@ -57,17 +58,17 @@ class Logger{
 
     public function infoProcessed($file){
         $this->info("Processing file $file...");
-        file_put_contents($this->logLocation . self::PROCESSED, "$file\n", FILE_APPEND);
+        file_put_contents($this->getLogName(self::PROCESSED), "$file\n", FILE_APPEND);
     }
 
     public function infoSkip($file){
         $this->infoOk("File $file has not changed and will be skiped.");
-        file_put_contents($this->logLocation . self::SKIP, "$file\n", FILE_APPEND);
+        file_put_contents($this->getLogName(self::SKIP), "$file\n", FILE_APPEND);
     }
 
     public function errorUpload($file){
         $this->error("Error during file upload($file), file will be skiped.");
-        file_put_contents($this->logLocation . self::UPLOAD_ERRORS, "$file\n", FILE_APPEND);
+        file_put_contents($this->getLogName(self::UPLOAD_ERRORS), "$file\n", FILE_APPEND);
     }
 }
 
