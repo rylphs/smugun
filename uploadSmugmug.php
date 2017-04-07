@@ -15,35 +15,51 @@ class Logger{
     const SKIP = "skip.log";
     const TIME_FORMAT = "Y-m-d:H:i:s";
 
-    private static function getTime(){
+    private $level = 0;
+
+    private function getTime(){
         $date = new DateTime(null, new DateTimeZone('America/Sao_Paulo'));
         return $date->format(self::TIME_FORMAT);
     }
 
-    private static function writeLog($txt){
-        file_put_contents(self::LOG, self::getTime() . " $txt", FILE_APPEND);
+    private function writeLog($txt){
+        $txt = str_repeat("   ", $this->level).$txt . "\n";
+        file_put_contents(self::LOG, $this->getTime() . " $txt", FILE_APPEND);
     }
 
-    public static function info($txt){
-        self::writeLog("INFO: " . "$txt\n");
+    private function decreaseLevel(){
+        $this->level = max(0, ($this->level - 1));
     }
 
-    public static function error($txt){
-        self::writeLog("ERROR: " . "$txt\n");
+    public function info($txt){
+        $this->writeLog("INFO: $txt");
+        $this->level++;
     }
 
-    public static function infoProcessed($file){
-        self::info("Processing file $file...\n");
+    public function error($txt){
+         $this->decreaseLevel();
+        $this->writeLog("ERROR: $txt");
+    }
+
+    public function infoOk(){
+        $this->decreaseLevel();
+        if(func_num_args() == 0) return;
+        $txt = func_get_arg(0);
+        $this->writeLog("INFO: $txt");
+    }
+
+    public function infoProcessed($file){
+        $this->info("Processing file $file...");
         file_put_contents(self::PROCESSED, "$file\n", FILE_APPEND);
     }
 
-    public static function infoSkip($file){
-        self::info("File $file has not changed and will be skiped.\n");
+    public function infoSkip($file){
+        $this->infoOk("File $file has not changed and will be skiped.");
         file_put_contents(self::SKIP, "$file\n", FILE_APPEND);
     }
 
-    public static function errorUpload($file){
-        self::error("Error during file upload($file), file will be skiped.");
+    public function errorUpload($file){
+        $this->error("Error during file upload($file), file will be skiped.");
         file_put_contents(self::UPLOAD_ERRORS, "$file\n", FILE_APPEND);
     }
 }
@@ -162,15 +178,20 @@ class Uploader {
     private $numberOfFilesUploaded = 0;
     private $numberOfFilesSkiped = 0;
     private $numberOfFilesWithError = 0;
+    private $logger;
+
+    public function __construct(){
+        $this->smugClient = new SmugClient();
+        $this->logger = new Logger();
+    }
 
     private function connect() {
-        $this->smugClient = new SmugClient();
         try{
-            Logger::info("Connecting to smugmug...");
+            $this->logger->info("Connecting to smugmug...");
             $this->smugClient->connect();
-            Logger::info("Connected!");
+            $this->logger->infoOk("Connected");
         }catch(Exception $e){
-            Logger::error("Conection error " . $e->getMessage());
+            $this->logger->error("Conection error " . $e->getMessage());
             throw($e);
         }
    }
@@ -196,24 +217,27 @@ class Uploader {
 
     private function createAlbumIfNotExists($path, $tags){
         $albumName = $this->getFolderName($path);
-        Logger::info("Searching for $albumName album...");
+        $this->logger->info("Searching for $albumName album...");
         if($this->smugClient->albumExists($albumName)){
-            Logger::info("\tAlbum found");
+            $this->logger->infoOk("Album already exists");
         }
         else{
-            Logger::info("\tAlbum not found, creating it...");
+            $this->logger->info("Album not found, creating it...");
             $this->smugClient->createAlbum($albumName, $tags);
+            $this->logger->infoOk("OK");
         }
     }
 
     private function getDirs($parent){
-        Logger::info("Getting subdirectories from $parent...");
+        $this->logger->info("Getting subdirectories from $parent...");
         $dirs = glob($parent . '/*' , GLOB_ONLYDIR);
+        $this->logger->infoOk();
         return $dirs;
     }
     
     private function getPhotos($dir){
-        Logger::info("Searching for media in $dir directory ...");
+        $this->logger->info("Searching for media in $dir directory ...");
+        $this->logger->infoOk();
         return glob("$dir/*.". self::MEDIA_PATTERN, GLOB_BRACE);
     }
 
@@ -223,53 +247,56 @@ class Uploader {
         $files = $this->getPhotos($path);
         $tags = $this->getTags($path);
         if(count($files)== 0){
-            Logger::info("Directory $path has no media files, nothing to do here!");
+            $this->logger->infoOk("Directory $path has no media files, nothing to do here!");
             return;
         }
 
         $this->createAlbumIfNotExists($path, $tags);
         foreach($files as $file){
-            Logger::infoProcessed($file);
+            $this->logger->infoProcessed($file);
             $this->numberOfFilesProcessed++;
             $md5 = $this->smugClient->getMd5Sums($albumName, $this->getFolderName($file));
             if($md5 != null && md5_file($file) == $md5){
-                Logger::infoSkip($file);
+                $this->logger->infoSkip($file);
                 $this->numberOfFilesSkiped++;
                 continue;
             }
             
-            Logger::info("Uploading $file...");
+            $this->logger->info("Uploading $file...");
             try{
                 $this->smugClient->upload($file, $albumName, $tags);
                 $this->numberOfFilesUploaded++;
+                $this->logger->infoOk();
             }catch(Exception $e){
                 $this->numberOfFilesWithError++;
-                Logger::errorUpload($file);
+                $this->logger->errorUpload($file);
             }
         }
     }
 
     private function processDir($path) {
-        Logger::info("Processing directory $path...");
+        $this->logger->info("Processing directory $path...");
         $dirs = $this->getDirs($path);
         if(count($dirs) > 0){
-            Logger::info("Directory $path contains children, processing them first...");
+            $this->logger->info("Directory $path contains children, processing them first...");
         }
         foreach($dirs as $child){
             $this->processDir($child);
         }
         $this->sendFiles($path);
+        $this->logger->infoOk();
     }
 
     public function startProcessing($dir){
-        Logger::info("Start processing $dir.");
+        $this->logger->info("Start processing $dir.");
         $this->connect();
         $this->processDir($dir);
-        Logger::info("Total files processed: " . $this->numberOfFilesProcessed);
-        Logger::info("Total files uploaded: " . $this->numberOfFilesUploaded);
-        Logger::info("Total files skiped: " . $this->numberOfFilesSkiped);
-        Logger::info("Total errors when uploading: " . $this->numberOfFilesWithError);
-        Logger::info("End processing.");
+        $this->logger->infoOk();
+        $this->logger->infoOk("Total files processed: " . $this->numberOfFilesProcessed);
+        $this->logger->infoOk("Total files uploaded: " . $this->numberOfFilesUploaded);
+        $this->logger->infoOk("Total files skiped: " . $this->numberOfFilesSkiped);
+        $this->logger->infoOk("Total errors when uploading: " . $this->numberOfFilesWithError);
+        $this->logger->infoOk("End processing.");
     }
    
 }
