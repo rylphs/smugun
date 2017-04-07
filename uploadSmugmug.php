@@ -11,6 +11,7 @@ class Logger{
 
     private $level = 0;
     private $logLocation;
+    private $mainLog;
 
     public function __construct(){
         if(func_num_args() > 0){
@@ -20,16 +21,17 @@ class Logger{
         file_put_contents($this->logLocation . self::UPLOAD_ERRORS, "");
         file_put_contents($this->logLocation . self::PROCESSED, "");
         file_put_contents($this->logLocation . self::SKIP, "");
+        $this->mainLog = $this->logLocation . $this->getTime("Y-m-d_H-i-s_") . self::LOG;
     }
 
-    private function getTime(){
+    private function getTime($format){
         $date = new DateTime(null, new DateTimeZone('America/Sao_Paulo'));
-        return $date->format(self::TIME_FORMAT);
+        return $date->format($format);
     }
 
     private function writeLog($txt){
         $txt = str_repeat("   ", $this->level).$txt . "\n";
-        file_put_contents($this->logLocation . self::LOG, $this->getTime() . " $txt", FILE_APPEND);
+        file_put_contents($this->mainLog, $this->getTime(self::TIME_FORMAT) . " $txt", FILE_APPEND);
     }
 
     private function decreaseLevel(){
