@@ -1,7 +1,7 @@
 #!/usr/bin/php
 
 <?php
-require_once "uploadSmugmug.php";
+require_once "Uploader.php";
 
 function getCaller(){
         $trace = debug_backtrace();
@@ -87,25 +87,65 @@ class TestBase{
 
 class TestSmugClient extends TestBase{
     
-    private function testSplitPath(){
-        $param = "/primeiro/segundo/ultimo";
-        $class = new ReflectionClass('SmugClient');
-        $obj = new SmugClient();
-        $result = $this->exec($obj, 'splitPath', $param);
-
-        return ($result['path'] ==  'primeiro/segundo' 
-            && $result['object'] == 'ultimo');
+    private function mustSepareteNode(){
+        $smug = new SmugmugClient();
+        $split = $this->exec($smug, "separeNodeFromPath", "foo/bar/node");
+        $this->expect("foo/bar", $split['path']);
+        $this->expect("node", $split['node']);
     }
 
-    private function testConnect(){
+    private function mustConnect(){
         try{
-            $c = new SmugClient();
+            $c = new SmugmugClient();
             $c->connect();
             return true;
         } catch(Exception $e){
             return false;
         }
     }
+
+    private function mustConvertToUri(){
+        $uploader = new SmugmugClient();
+        $converted = $this->exec($uploader, "toUriPath", "teste/folder");
+        $this->expect("Teste/Folder", $converted);
+    }
+
+    private function mustNotCreateSameNodeTwice(){
+        try{
+            $smug = new SmugmugClient();
+            $this->exec($smug, "connect");
+            $nodeId = $this->exec($smug, "createNode", "testNode", 2, []);
+            $nodeId = $this->exec($smug, "createNode", "testNode", 2, []);
+            return false;
+        }catch(AlreadExistsException $e){
+            return true;
+        }
+    }
+
+    private function musGetNodeId(){
+      /*  $smug = new SmugClient();
+        $this->exec($smug, "connect");
+        $nodeId = $this->exec($smug, "getNodeId", "aaaaa");
+        $this->expect("Rc9kbM", $nodeId);
+
+        $nodeId = $this->exec($smug, "getNodeId", "aaaaa/abc");
+        $this->expect("NjKfHM", $nodeId);*/
+    }
+
+    
+
+    private function mustCreateFolder(){
+      /*  $uploader = new Uploader("fotosTeste");
+        $this->exec($uploader, "connect");
+        $exists = $this->exec($uploader, "folderExists", "testeNovo");
+        $this->expect(false, $exists);
+
+        $this->exec($uploader, "createFolder", "testeNovo");
+        $this->exec($uploader, "connect");
+        $exists = $this->exec($uploader, "folderExists", "testeNovo");
+        $this->expect(true, $exists);*/
+    }
+
 
 }
 
@@ -146,53 +186,22 @@ class TestUploader extends TestBase{
         $this->expect(3, count($subFodlers));
     }
 
-    private function mustConvertToUri(){
-        $uploader = new SmugClient();
-        $converted = $this->exec($uploader, "toUriPath", "teste/folder");
-        $this->expect("Teste/Folder", $converted);
-    }
-
-    private function mustCheckFolderInSmugmug(){
-      /*  $uploader = new Uploader("fotosTeste");
+    private function mustFindMedia(){
+        $uploader = new Uploader("fotosTeste");
         $this->exec($uploader, "connect");
-        $exists = $this->exec($uploader, "folderExists", "aaaaa");
-        $this->expect(true, $exists);
-
-        $exists = $this->exec($uploader, "folderExists", "aaaab");
-        $this->expect(false, $exists);*/
+        $files = $this->exec($uploader, "searchForMedia", "fotosTeste/Brasilia");
+        $this->expect(3, count($files));
     }
 
-    private function musGetNodeId(){
-        /*$smug = new SmugClient();
-        $this->exec($smug, "connect");
-        $nodeId = $this->exec($smug, "getNodeId", "aaaaa");
-        $this->expect("Rc9kbM", $nodeId);
-
-        $nodeId = $this->exec($smug, "getNodeId", "aaaaa/abc");
-        $this->expect("NjKfHM", $nodeId);*/
-    }
-
-    private function mustSepareteNode(){
-        $smug = new SmugClient();
-        $split = $this->exec($smug, "separeNodeFromPath", "foo/bar/node");
-        $this->expect("foo/bar", $split['path']);
-        $this->expect("node", $split['node']);
-    }
-
-    private function mustCreateFolder(){
-      /*  $uploader = new Uploader("fotosTeste");
+    private function mustGenerateTags(){
+        $uploader = new Uploader("fotosTeste");
         $this->exec($uploader, "connect");
-        $exists = $this->exec($uploader, "folderExists", "testeNovo");
-        $this->expect(false, $exists);
-
-        $this->exec($uploader, "createFolder", "testeNovo");
-        $this->exec($uploader, "connect");
-        $exists = $this->exec($uploader, "folderExists", "testeNovo");
-        $this->expect(true, $exists);*/
+        $tags = $this->exec($uploader, "generateTags", "fotosTeste/Brasilia/Ultimo");
+        $this->expect("Brasilia,Ultimo", $tags);
     }
 
     private function mustProcess(){
-        
+        return;
         $files = glob('fotosTeste/*.log', GLOB_BRACE);
         foreach($files as $file){
             unlink($file);
@@ -205,5 +214,8 @@ class TestUploader extends TestBase{
 }
 
 $teste = new TestUploader();
+$teste->run();
+
+$teste = new TestSmugClient();
 $teste->run();
  

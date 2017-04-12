@@ -85,9 +85,19 @@ $smugClient->connect();
 $client = $smugClient->getClient();
 
 echo "\n";
-if($command == "get")
+try{
+    if($command == "get")
     print_r(getPathResponse($path, $client->get($uri, $options)));
 else if($command == "post")
     print_r(getPathResponse($path, $client->post($uri, $options)));
+else if($command == "options")
+    print_r(getPathResponse($path, $client->options($uri, $options)));
+}catch(GuzzleHttp\Exception\ClientException $e){
+    print_r(
+        getPathResponse($path, json_decode(
+            $e->getResponse()->getBody()->getContents())
+            ));
+}
+
 echo "\n";
 echo "\n";
