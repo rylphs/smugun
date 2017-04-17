@@ -22,7 +22,7 @@ class SmugmugClient{
     const API_KEY = 'N98SRGkT8sgWBnstKwCPX7nj2Rwhd6K6';
     const FOLDER_URI = "folder/user/rapha/Uploads";
     const FOLDER_TYPE = 2;
-    const ALBUM_TYPE = 2;
+    const ALBUM_TYPE = 4;
 
     private $client = null;
 
@@ -37,11 +37,12 @@ class SmugmugClient{
 
     public function createNode($path, $type, $options){
         try{
+            
             $path = $this->separeNodeFromPath($path);
             $nodeName = $path['node'];
+            
             $nodeId = $this->getNodeId($this->toUriPath($path['path']));
             $uri = "node/$nodeId!children";
-            $isAlbum = ($type == 2)/
             
             $options = array_merge([
                 "Type" => $type,
@@ -54,6 +55,46 @@ class SmugmugClient{
             $code = $e->getResponse()->getStatusCode();
             if($code == 409){
                 $conflicting = $this->getConflicting($e);
+                $nodeInfo = $this->client->get($conflicting->Uri);
+                $isAlbum = $nodeInfo->Node->Type == "Album";
+                throw new AlreadExistsException("Node $nodeName already exists", $isAlbum, $conflicting->Uri);
+            }
+            else throw $e;
+        }
+    }
+
+    public function createFolderAndMoveAlbum($path, $uri){
+        try{
+            $path = $this->separeNodeFromPath($path);
+
+            $nodeName = $path['node'];
+            $parentId = $this->getNodeId($this->toUriPath($path['path']));
+            
+            $options = [
+                "Type" => self::FOLDER_TYPE,
+                "Name" => $nodeName,
+                "UrlName" => ucfirst($nodeName)."TMP"
+            ];
+            $this->client->post("node/$parentId!children", $options);
+
+            $folderId = $this->getNodeId($this->toUriPath($path['path']."/".ucfirst($nodeName)."TMP"));
+            $this->client->post("node/$folderId!movenodes", [
+                "Async" => false,
+                "AutoRename" => false,
+                "MoveUris" => [
+                   "$uri"
+                ]
+            ]);
+            $this->client->patch("node/$folderId", [
+                "UrlName" => ucfirst($nodeName)
+            ]);
+
+        }catch(GuzzleHttp\Exception\ClientException $e){
+            $code = $e->getResponse()->getStatusCode();
+            if($code == 409){
+                $conflicting = $this->getConflicting($e);
+                $nodeInfo = $this->client->get($conflicting->Uri);
+                $isAlbum = $nodeInfo->Node->Type == "Album";
                 throw new AlreadExistsException("Node $nodeName already exists", $isAlbum, $conflicting->Uri);
             }
             else throw $e;
@@ -65,6 +106,13 @@ class SmugmugClient{
     }
 
     public function createAlbum($path){
+        $tags = $this->generateTags($path);
+        $this->createNode($path, self::ALBUM_TYPE, ["Keywords" => $tags]);
+    }
+
+    public function createAlbumInsideFolder($path){
+        $albumName = $this->separeNodeFromPath($path)['node'];
+        $path = $path."/".$albumName;
         $tags = $this->generateTags($path);
         $this->createNode($path, self::ALBUM_TYPE, ["Keywords" => $tags]);
     }
@@ -96,11 +144,16 @@ class SmugmugClient{
         ];
     }
 
-    private function getNodeId($path){
+    private function getNodeInfo($path){
         $path = $this->toUriPath($path);
         if($path != "") $path = "/$path";
-        $folderInfo = $this->client->get(self::FOLDER_URI . $path);
-        return $folderInfo->Folder->NodeID;
+        $nodeInfo = $this->client->get(self::FOLDER_URI . $path);
+        return $nodeInfo;
+    }
+
+    private function getNodeId($path){
+        $nodeInfo = $this->getNodeInfo($path);
+        return $nodeInfo->Folder->NodeID;
     }
 
     private function setToken(){

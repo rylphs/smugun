@@ -180,14 +180,22 @@ class Uploader {
         }catch(AlreadExistsException $e){}
     }
 
+    private function createAlbumInsideFolder($path){
+        try{
+            $this->logger->infoOk("Creating album if not exists.");
+            $this->smugClient->createAlbumInsideFolder($path);
+       }catch(AlreadExistsException $e){}
+    }
+
     private function createFolder($path){
         try{
-            $this->logger->infoOk("Creating folder if not exists.");
+            $this->logger->info("Creating folder if not exists.");
             $this->smugClient->createFolder($path);
+            $this->logger->infoOk();
         }catch(AlreadExistsException $e){
             if($e->isAlbum){
-                //TODO: parei aqui
-                $this->smugClient->move($e->uri);
+                $this->logger->infoOk("There is an album with the same name. Creating folder and moving album");
+                $this->smugClient->createFolderAndMoveAlbum($path, $e->uri);
             }
         }
     }
@@ -220,20 +228,17 @@ class Uploader {
     }
 
     private function processFiles($path, $isFolder){
-        $albumName = $this->separeNodeFromPath($path)['node'];
-        if($isFolder) $albumUri = "$path/$albumName";
-        else $albumUri = $path;
         $files = $this->searchForMedia($path);
         $tags = $this->generateTags($path);
         if(count($files)== 0){
             $this->logger->infoOk("Directory $path has no media files, nothing to do here!");
             return;
         }
-
-        $this->createAlbum($albumUri);
+        if($isFolder) $this->createAlbumInsideFolder($path);
+        else $this->createAlbum($path);
 
         foreach($files as $file){
-            $this->processFile($albumUri, $file);
+           // $this->processFile($albumUri, $file);
         }
     }
 
@@ -259,7 +264,10 @@ class Uploader {
         $this->countFiles($dir);
         $this->logger->info("Start processing $dir.");
         $this->connect();
-        $this->processFolder($dir);
+        $subFolders = $this->getSubfolders($dir);
+       // foreach($subFolders as $child){
+            $this->processFolder($dir);
+        //}
         $this->logger->infoOk();
         $this->logger->infoOk("Total files: " . $this->numberOfTotalFiles);
         $this->logger->infoOk("Total files processed: " . $this->numberOfFilesProcessed);
@@ -271,12 +279,16 @@ class Uploader {
    
 }
 
-/*try{
+try{
    $dir = rtrim($argv[1], "/");
    echo "Starting script at $dir ...\n";
    $uploader = new Uploader($dir);
    $uploader->startProcessing();
    echo "Success!\n";
-}catch(Exception $e){
+}catch(GuzzleHttp\Exception\ClientException $e){
+    print_r($e->getRequest()->getBody());
+    print_r(json_decode($e->getResponse()->getBody()->getContents()));
+}
+catch(Exception $e){
     echo "An error has ocurred. Check the main.log file.\n";
-}*/
+}
