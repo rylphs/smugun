@@ -162,7 +162,7 @@ class Uploader {
 
     private function searchForMedia($dir){
         $this->logger->info("Searching for media in $dir directory ...");
-        $this->logger->infoOk();
+      //  $this->logger->infoOk();
         return glob("$dir/*.". self::MEDIA_PATTERN, GLOB_BRACE);
     }
 
@@ -176,15 +176,21 @@ class Uploader {
     private function createAlbum($path){
        try{
             $this->logger->infoOk("Creating album if not exists.");
-            $this->smugClient->createAlbum($path);
-        }catch(AlreadExistsException $e){}
+            $albumInfo = $this->smugClient->createAlbum($path);
+            return $albumInfo->Node->Uris->Album;
+        }catch(AlreadExistsException $e){
+             return $e->nodeInfo->Node->Uris->Album->Uri;
+        }
     }
 
     private function createAlbumInsideFolder($path){
         try{
             $this->logger->infoOk("Creating album if not exists.");
-            $this->smugClient->createAlbumInsideFolder($path);
-       }catch(AlreadExistsException $e){}
+            $albumInfo = $this->smugClient->createAlbumInsideFolder($path);
+            return $albumInfo->Node->Uris->Album;
+       }catch(AlreadExistsException $e){
+           return $e->nodeInfo->Node->Uris->Album->Uri;
+       }
     }
 
     private function createFolder($path){
@@ -195,12 +201,14 @@ class Uploader {
         }catch(AlreadExistsException $e){
             if($e->isAlbum){
                 $this->logger->infoOk("There is an album with the same name. Creating folder and moving album");
-                $this->smugClient->createFolderAndMoveAlbum($path, $e->uri);
+                $this->smugClient->createFolderAndMoveAlbum($path, $e->nodeInfo->Uri);
             }
         }
     }
 
-    private function getMd5Sums($albumUri){}
+    private function getMd5Sums($albumUri){
+        return $this->smugClient->getMd5Sums($albumUri);
+    }
 
     private function uploadFile($algumUri, $file){
         $this->logger->info("Uploading $file...");
@@ -218,13 +226,15 @@ class Uploader {
         $this->logger->infoProcessed($file);
         $this->numberOfFilesProcessed++;
         $md5 = $this->getMd5Sums($albumUri);
-        if($md5 != null && md5_file($file) == $md5){
+        $fileName = basename($file);
+        if(array_key_exists($fileName, $md5) && $md5[$fileName] != null && md5_file($file) == $md5){
             $this->logger->infoSkip($file);
             $this->numberOfFilesSkiped++;
             return;
         }
+        else $this->logger->infoOk();
         
-        $this->uploadFile($algumUri, $file);
+      //  $this->uploadFile($algumUri, $file);
     }
 
     private function processFiles($path, $isFolder){
@@ -232,13 +242,13 @@ class Uploader {
         $tags = $this->generateTags($path);
         if(count($files)== 0){
             $this->logger->infoOk("Directory $path has no media files, nothing to do here!");
+            $this->logger->infoOk();
             return;
         }
-        if($isFolder) $this->createAlbumInsideFolder($path);
-        else $this->createAlbum($path);
-
+        if($isFolder) $albumUri = $this->createAlbumInsideFolder($path);
+        else $albumUri = $this->createAlbum($path);
         foreach($files as $file){
-           // $this->processFile($albumUri, $file);
+           $this->processFile($albumUri, $file);
         }
     }
 
@@ -253,6 +263,7 @@ class Uploader {
             foreach($subFolders as $child){
                 $this->processFolder($child);
             }
+            $this->logger->infoOk();
         }
 
         $this->processFiles($path, $isFolder);
@@ -264,10 +275,7 @@ class Uploader {
         $this->countFiles($dir);
         $this->logger->info("Start processing $dir.");
         $this->connect();
-        $subFolders = $this->getSubfolders($dir);
-       // foreach($subFolders as $child){
             $this->processFolder($dir);
-        //}
         $this->logger->infoOk();
         $this->logger->infoOk("Total files: " . $this->numberOfTotalFiles);
         $this->logger->infoOk("Total files processed: " . $this->numberOfFilesProcessed);

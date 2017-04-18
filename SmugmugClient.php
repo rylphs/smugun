@@ -2,12 +2,12 @@
 
 class AlreadExistsException extends Exception{
     public $isAlbum;
-    public $uri;
+    public $nodeInfo;
 
-    public function __construct($message, $isAlbum, $uri){
+    public function __construct($message, $isAlbum, $nodeInfo){
         parent::__construct($message);
         $this->isAlbum = $isAlbum;
-        $this->uri = $uri;
+        $this->nodeInfo = $nodeInfo;
     }
 }
 
@@ -25,6 +25,7 @@ class SmugmugClient{
     const ALBUM_TYPE = 4;
 
     private $client = null;
+    private $md5Cache = [];
 
     public function connect(){
         $options = [ 'AppName' => self::APP_NAME, 
@@ -50,14 +51,14 @@ class SmugmugClient{
                 "UrlName" => ucfirst($nodeName)
             ], $options);
 
-            $this->client->post($uri, $options);
+            return $this->client->post($uri, $options);
         }catch(GuzzleHttp\Exception\ClientException $e){
             $code = $e->getResponse()->getStatusCode();
             if($code == 409){
                 $conflicting = $this->getConflicting($e);
                 $nodeInfo = $this->client->get($conflicting->Uri);
                 $isAlbum = $nodeInfo->Node->Type == "Album";
-                throw new AlreadExistsException("Node $nodeName already exists", $isAlbum, $conflicting->Uri);
+                throw new AlreadExistsException("Node $nodeName already exists", $isAlbum, $conflicting);
             }
             else throw $e;
         }
@@ -75,7 +76,7 @@ class SmugmugClient{
                 "Name" => $nodeName,
                 "UrlName" => ucfirst($nodeName)."TMP"
             ];
-            $this->client->post("node/$parentId!children", $options);
+            $folderInfo = $this->client->post("node/$parentId!children", $options);
 
             $folderId = $this->getNodeId($this->toUriPath($path['path']."/".ucfirst($nodeName)."TMP"));
             $this->client->post("node/$folderId!movenodes", [
@@ -88,6 +89,7 @@ class SmugmugClient{
             $this->client->patch("node/$folderId", [
                 "UrlName" => ucfirst($nodeName)
             ]);
+            return $folderInfo;
 
         }catch(GuzzleHttp\Exception\ClientException $e){
             $code = $e->getResponse()->getStatusCode();
@@ -95,26 +97,45 @@ class SmugmugClient{
                 $conflicting = $this->getConflicting($e);
                 $nodeInfo = $this->client->get($conflicting->Uri);
                 $isAlbum = $nodeInfo->Node->Type == "Album";
-                throw new AlreadExistsException("Node $nodeName already exists", $isAlbum, $conflicting->Uri);
+                throw new AlreadExistsException("Node $nodeName already exists", $isAlbum, $conflicting);
             }
             else throw $e;
         }
     }
 
     public function createFolder($path){
-        $this->createNode($path, self::FOLDER_TYPE, []);
+        return $this->createNode($path, self::FOLDER_TYPE, []);
     }
 
     public function createAlbum($path){
         $tags = $this->generateTags($path);
-        $this->createNode($path, self::ALBUM_TYPE, ["Keywords" => $tags]);
+        return $this->createNode($path, self::ALBUM_TYPE, ["Keywords" => $tags]);
     }
 
     public function createAlbumInsideFolder($path){
         $albumName = $this->separeNodeFromPath($path)['node'];
         $path = $path."/".$albumName;
         $tags = $this->generateTags($path);
-        $this->createNode($path, self::ALBUM_TYPE, ["Keywords" => $tags]);
+        return $this->createNode($path, self::ALBUM_TYPE, ["Keywords" => $tags]);
+    }
+
+    public function getMd5Sums($albumUri){
+        if(!array_key_exists($albumUri, $this->md5Cache)){
+            $photosUri = "$albumUri!images";
+            $photosInfo = $this->client->get($photosUri);
+            if(!isset($photosInfo->AlbumImage)){
+                $this->md5Cache[$albumUri] = [];
+                return [];
+            };
+            $photosInfo = $photosInfo->AlbumImage;
+            $md5 = [];
+            foreach($photosInfo as $info){
+                $md5[$info->FileName] = $info->ArchivedMD5;
+            }
+            $this->md5Cache[$albumUri] = $md5;
+        }
+        
+        return $this->md5Cache[$albumUri];
     }
 
     private function getConflicting($e){
