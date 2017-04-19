@@ -43,7 +43,7 @@ class Logger{
     }
 
     public function error($txt){
-         $this->decreaseLevel();
+        $this->decreaseLevel();
         $this->writeLog("ERROR: $txt");
     }
 
@@ -64,8 +64,8 @@ class Logger{
         file_put_contents($this->getLogName(self::SKIP), "$file\n", FILE_APPEND);
     }
 
-    public function errorUpload($file){
-        $this->error("Error during file upload($file), file will be skiped.");
+    public function errorUpload($file, $reason){
+        $this->error("Error during file upload($file), file will be skiped. (reason: $reason)");
         file_put_contents($this->getLogName(self::UPLOAD_ERRORS), "$file\n", FILE_APPEND);
     }
 }

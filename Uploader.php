@@ -62,104 +62,6 @@ class Uploader {
         return implode(",", $tags);
    }
 
-  /*  private function getFolderName($path){
-        return basename($path);
-    }
-
-    private function getTags($path){
-        $tags = explode('/', $path);
-        $filter = function($value) {
-            if($value == '.' || $value == "") return false;
-            return true;
-        };
-        $tags = array_filter($tags, $filter);
-        $tags = array_slice($tags, 1);
-        return implode(",", $tags);
-    }
-
-    private function createAlbumIfNotExists($path, $tags){
-        $albumName = $this->getFolderName($path);
-        $this->logger->info("Searching for $albumName album...");
-        if($this->smugClient->albumExists($path)){
-            $this->logger->infoOk("Album already exists");
-        }
-        else{
-            $this->logger->info("Album not found, creating it...");
-            $this->smugClient->createAlbum($path, $tags);
-            $this->logger->infoOk("OK");
-        }
-    }
-
-    private function getFolders($parent){
-        $this->logger->info("Getting subdirectories from $parent...");
-        $dirs = glob($parent . '/*' , GLOB_ONLYDIR);
-        $this->logger->infoOk();
-        return $dirs;
-    }
-    
-    private function getPhotos($dir){
-        $this->logger->info("Searching for media in $dir directory ...");
-        $this->logger->infoOk();
-        return glob("$dir/*.". self::MEDIA_PATTERN, GLOB_BRACE);
-    }
-
-
-    private function sendFiles($path){
-        $albumName = $this->getFolderName($path);
-        $files = $this->getPhotos($path);
-        $tags = $this->getTags($path);
-        if(count($files)== 0){
-            $this->logger->infoOk("Directory $path has no media files, nothing to do here!");
-            return;
-        }
-
-        $this->createAlbumIfNotExists($path, $tags);
-        foreach($files as $file){
-            $this->logger->infoProcessed($file);
-            $this->numberOfFilesProcessed++;
-            $md5 = $this->smugClient->getMd5Sums($albumName, $this->getFolderName($file));
-            if($md5 != null && md5_file($file) == $md5){
-                $this->logger->infoSkip($file);
-                $this->numberOfFilesSkiped++;
-                continue;
-            }
-            
-            $this->logger->info("Uploading $file...");
-            try{
-                $this->smugClient->upload($file, $albumName, $tags);
-                $this->numberOfFilesUploaded++;
-                $this->logger->infoOk();
-            }catch(Exception $e){
-                $this->numberOfFilesWithError++;
-                $this->logger->errorUpload($file);
-            }
-        }
-    }
-
-    private function processDir($path) {
-        $this->logger->info("Processing folder $path...");
-        $subFolders = $this->getFolders($path);
-
-        if(count($subFolders) > 0){
-            $this->logger->info("Checking if folder exists");
-
-            if($this->smugClient->folderExists($path)){
-                $this->logger->infoOk("Folder already exists");
-            }
-            else{
-                $this->logger->infoOk("Folder not exists, creating it...");
-            }
-            $this->logger->info("Processing $path children...");
-        }
-
-        foreach($subFolders as $child){
-            $this->processDir($child);
-        }
-
-        $this->sendFiles($path);
-        $this->logger->infoOk();
-    }*/
-
     private function searchForMedia($dir){
         $this->logger->info("Searching for media in $dir directory ...");
       //  $this->logger->infoOk();
@@ -180,6 +82,8 @@ class Uploader {
             return $albumInfo->Node->Uris->Album;
         }catch(AlreadExistsException $e){
              return $e->nodeInfo->Node->Uris->Album->Uri;
+        }catch(Exception $e){
+            $this->logger->error("Error while creating album $path: " . $e->getMessage());
         }
     }
 
@@ -190,7 +94,9 @@ class Uploader {
             return $albumInfo->Node->Uris->Album;
        }catch(AlreadExistsException $e){
            return $e->nodeInfo->Node->Uris->Album->Uri;
-       }
+       }catch(Exception $e){
+            $this->logger->error("Error while creating album $path: " . $e->getMessage());
+        }
     }
 
     private function createFolder($path){
@@ -203,11 +109,18 @@ class Uploader {
                 $this->logger->infoOk("There is an album with the same name. Creating folder and moving album");
                 $this->smugClient->createFolderAndMoveAlbum($path, $e->nodeInfo->Uri);
             }
+        }catch(Exception $e){
+            $this->logger->error("Error while creating folder $path: " . $e->getMessage());
         }
     }
 
     private function getMd5Sums($albumUri){
-        return $this->smugClient->getMd5Sums($albumUri);
+        try{
+            return $this->smugClient->getMd5Sums($albumUri);
+        }catch(Exception $e){
+            $this->logger->error("Error while getting md5 for album $albumUri: " . $e->getMessage());
+        }
+        
     }
 
     private function uploadFile($albumUri, $file){
@@ -218,7 +131,7 @@ class Uploader {
             $this->logger->infoOk();
         }catch(Exception $e){
             $this->numberOfFilesWithError++;
-            $this->logger->errorUpload($file);
+            $this->logger->errorUpload($file, $e->getMessage());
         }
     }
 
@@ -227,7 +140,7 @@ class Uploader {
         $this->numberOfFilesProcessed++;
         $md5 = $this->getMd5Sums($albumUri);
         $fileName = basename($file);
-        if(array_key_exists($fileName, $md5) && $md5[$fileName] != null && md5_file($file) == $md5){
+        if(array_key_exists($fileName, $md5) && $md5[$fileName] != null && md5_file($file) == $md5[$fileName]){
             $this->logger->infoSkip($file);
             $this->numberOfFilesSkiped++;
             return;
@@ -275,7 +188,7 @@ class Uploader {
         $this->countFiles($dir);
         $this->logger->info("Start processing $dir.");
         $this->connect();
-            $this->processFolder($dir);
+        $this->processFolder($dir);
         $this->logger->infoOk();
         $this->logger->infoOk("Total files: " . $this->numberOfTotalFiles);
         $this->logger->infoOk("Total files processed: " . $this->numberOfFilesProcessed);
