@@ -1,7 +1,8 @@
 #!/usr/bin/php
 
 <?php
-require_once "Uploader.php";
+//require_once "Uploader.php";
+require_once "SmugmugClient.php";
 
 function getCaller(){
         $trace = debug_backtrace();
@@ -122,6 +123,12 @@ class TestSmugClient extends TestBase{
         }
     }
 
+    private function mustGenerateTags(){
+        $smug = new SmugmugClient("fotosTeste");
+        $tags = $this->exec($smug, "generateTags", "fotosTeste/Brasilia/Ultimo");
+        $this->expect("Brasilia,Ultimo", $tags);
+    }
+
     private function musGetNodeId(){
       /*  $smug = new SmugClient();
         $this->exec($smug, "connect");
@@ -213,8 +220,6 @@ class TestUploader extends TestBase{
     private function testeQueNuncaFalha(){return true;}
 }
 
-$teste = new TestUploader();
-$teste->run();
 
 $teste = new TestSmugClient();
 $teste->run();

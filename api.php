@@ -94,9 +94,7 @@ else if($command == "options")
     print_r(getPathResponse($path, $client->options($uri, $options)));
 }catch(GuzzleHttp\Exception\ClientException $e){
     print_r(
-        getPathResponse($path, json_decode(
-            $e->getResponse()->getBody()->getContents())
-            ));
+        getPathResponse($path, json_decode($e->getResponse()->getBody()->getContents())));
 }
 
 echo "\n";

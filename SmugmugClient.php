@@ -1,4 +1,5 @@
 <?php
+require_once 'vendor/autoload.php';
 
 class AlreadExistsException extends Exception{
     public $isAlbum;
@@ -136,6 +137,14 @@ class SmugmugClient{
         }
         
         return $this->md5Cache[$albumUri];
+    }
+
+     public function upload($file, $albumUri){
+        $tags = $this->generateTags(dirname($file));
+        $this->client->upload($albumUri, $file, [
+            'FileName' => $file,
+            'Keywords' => $tags
+        ]);
     }
 
     private function getConflicting($e){
