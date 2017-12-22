@@ -1,0 +1,23 @@
+{
+  "name": "smugmage",
+  "version": "1.0.0",
+  "description": "Node client for smugmug",
+  "main": "index.js",
+  "scripts": {
+    "build": "tsc",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "smugmug"
+  ],
+  "author": "Raphael Couto Ferreira",
+  "license": "ISC",
+  "dependencies": {
+    "@types/es6-promise": "0.0.33",
+    "@types/node": "^8.5.1",
+    "oauth-1.0a": "^2.2.3",
+    "path": "^0.12.7",
+    "request": "^2.83.0",
+    "typescript": "^2.6.2"
+  }
+}

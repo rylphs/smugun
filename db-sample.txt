@@ -1,0 +1,33 @@
+Images
+
+Name	LocalPath	RemotePath	LocalMd5	RemoteMd5	LocaTags	RemoteTags	Status
+...	A		-		A		-		...		...		ADDED
+...	-		A		-		A		...		...		DELETED
+...	A'		A		...		...		...		...		MOVED
+...	...		...		'A		A		...		...		CHANGED
+...	...		...		...		...		A'		A		TAGSCHANGED	
+...	A		A		A		A		A		A		OK		
+
+Folders
+Local	Remote	LocalTags	RemoteTags	Status
+A	A	A'		A		TAGSCHANGED
+A	-	...		...		ADDED
+-	A	...		...		DELETED
+
+
+-Generate/Update ImageDB
+-each file
+	-status==added: 
+		folder !exists? create folder
+		upload file
+	-status==deleted: delete file
+	-status==moved: move file
+	-status==changed:
+		upload new file
+		delete old
+	-status==tagschanged: update tags
+	-status==ok: skip file
+
+-Generate/Update FolderDB (
+-each folder
+

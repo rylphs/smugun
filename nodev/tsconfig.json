@@ -1,0 +1,15 @@
+{
+    "compilerOptions": {
+        "outDir": "./build",
+        "allowJs": true,
+        "emitDecoratorMetadata": true,
+        "experimentalDecorators": true,
+        "moduleResolution": "node",
+        "module": "commonjs",
+        "noImplicitAny": false,
+        "removeComments": false,
+        "sourceMap": true,
+        "suppressImplicitAnyIndexErrors": true,
+        "target": "es5"
+    }
+}
