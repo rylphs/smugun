@@ -49,7 +49,7 @@ class SmugmugClient{
             $options = array_merge([
                 "Type" => $type,
                 "Name" => $nodeName,
-                "UrlName" => ucfirst($nodeName)
+                "UrlName" => $this->formatUrl($nodeName)
             ], $options);
 
             return $this->client->post($uri, $options);
@@ -75,11 +75,11 @@ class SmugmugClient{
             $options = [
                 "Type" => self::FOLDER_TYPE,
                 "Name" => $nodeName,
-                "UrlName" => ucfirst($nodeName)."TMP"
+                "UrlName" =>  $this->formatUrl($nodeName)."TMP"
             ];
             $folderInfo = $this->client->post("node/$parentId!children", $options);
 
-            $folderId = $this->getNodeId($this->toUriPath($path['path']."/".ucfirst($nodeName)."TMP"));
+            $folderId = $this->getNodeId($this->toUriPath($path['path']."/".$options["UrlName"]));
             $this->client->post("node/$folderId!movenodes", [
                 "Async" => false,
                 "AutoRename" => false,
@@ -88,7 +88,7 @@ class SmugmugClient{
                 ]
             ]);
             $this->client->patch("node/$folderId", [
-                "UrlName" => ucfirst($nodeName)
+                "UrlName" => $this->formatUrl($nodeName)
             ]);
             return $folderInfo;
 
@@ -122,7 +122,7 @@ class SmugmugClient{
 
     public function getMd5Sums($albumUri){
         if(!array_key_exists($albumUri, $this->md5Cache)){
-            $photosUri = "$albumUri!images";
+            $photosUri = "$albumUri!images?start=1&count=5000";
             $photosInfo = $this->client->get($photosUri);
             if(!isset($photosInfo->AlbumImage)){
                 $this->md5Cache[$albumUri] = [];
@@ -145,6 +145,12 @@ class SmugmugClient{
             'FileName' => $file,
             'Keywords' => $tags
         ]);
+    }
+
+    private function formatUrl($nodeName){
+        $url = preg_replace('/_/', ' ', $nodeName);
+        $url = preg_replace('/\s/', '', ucwords($url));
+        return $url;
     }
 
     private function getConflicting($e){
@@ -198,7 +204,7 @@ class SmugmugClient{
         $path = trim($path, "/");
         $path = explode("/", $path);
         $path = array_map(function($value){
-            return ucfirst($value);
+            return$this->formatUrl($value);
         }, $path);
         return implode("/", $path);
     }
